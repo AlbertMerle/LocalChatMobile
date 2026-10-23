@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import org.json.JSONException
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
@@ -39,10 +40,16 @@ fun classify(svc: Svc, url: String, e: Throwable): AppError {
     return when {
         e is UnknownHostException ->
             err("DNS", "${svc.label}: can't resolve the server address. Check the IP in Settings.")
-        e is ConnectException || e is NoRouteToHostException ->
-            err("CONN", "${svc.label}: can't connect. Is the server running on that port, and is the phone on the same network?")
-        e is SocketTimeoutException ->
-            err("TIMEOUT", "${svc.label}: the server didn't answer in time.")
+        e is ConnectException || e is NoRouteToHostException -> {
+            val claw = if (svc == Svc.LLM) " OpenClaw listens on localhost only by default: run `openclaw config set gateway.bind lan` and restart the gateway." else ""
+            err("CONN", "${svc.label}: connection refused. Nothing is listening on that port.$claw")
+        }
+        e is InterruptedIOException && e.message?.contains("connect", ignoreCase = true) == true -> {
+            val claw = if (svc == Svc.LLM) " For OpenClaw also check gateway.bind (needs `lan`)." else ""
+            err("CONN-TIMEOUT", "${svc.label}: no reply while connecting. A firewall on the server is probably dropping this port, or the IP is wrong.$claw")
+        }
+        e is InterruptedIOException ->
+            err("TIMEOUT", "${svc.label}: connected, but the server didn't answer in time.")
         e is SSLException ->
             err("TLS", "${svc.label}: TLS/SSL failure. Local servers usually want http://, not https://.")
         e is HttpStatusException -> {

@@ -214,7 +214,7 @@ fun SettingsScreen(
     var s by remember { mutableStateOf(initial) }
     var showKey by remember { mutableStateOf(false) }
 
-    Column(
+    androidx.compose.material3.Surface(Modifier.fillMaxSize()) { Column(
         Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()
             .verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -236,8 +236,8 @@ fun SettingsScreen(
         Text("Ports (leave blank for default)", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PortField("Chat", s.llmPort, DEFAULT_LLM_PORT, Modifier.weight(1f)) { s = s.copy(llmPort = it) }
-            PortField("Speech-to-text", s.sttPort, DEFAULT_STT_PORT, Modifier.weight(1f)) { s = s.copy(sttPort = it) }
-            PortField("Text-to-speech", s.ttsPort, DEFAULT_TTS_PORT, Modifier.weight(1f)) { s = s.copy(ttsPort = it) }
+            PortField("STT", s.sttPort, DEFAULT_STT_PORT, Modifier.weight(1f)) { s = s.copy(sttPort = it) }
+            PortField("TTS", s.ttsPort, DEFAULT_TTS_PORT, Modifier.weight(1f)) { s = s.copy(ttsPort = it) }
         }
 
         OutlinedButton(onClick = { onTest(s) }, enabled = s.isConfigured, modifier = Modifier.fillMaxWidth()) { Text("Test connection") }
@@ -246,7 +246,7 @@ fun SettingsScreen(
         }
         Button(onClick = { onSave(s) }, enabled = s.isConfigured, modifier = Modifier.fillMaxWidth()) { Text("Save") }
         TextButton(onClick = onLog, modifier = Modifier.fillMaxWidth()) { Text("View error log") }
-    }
+    } }
 }
 
 @Composable

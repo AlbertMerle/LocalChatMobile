@@ -63,7 +63,8 @@ class ErrorTest {
         assertEquals("STT-HTTP-401", classify(Svc.STT, u, HttpStatusException(401, "")).code)
         assertEquals("LLM-CONN", classify(Svc.LLM, u, java.net.ConnectException("refused")).code)
         assertEquals("TTS-DNS", classify(Svc.TTS, u, java.net.UnknownHostException("x")).code)
-        assertEquals("STT-TIMEOUT", classify(Svc.STT, u, java.net.SocketTimeoutException()).code)
+        assertEquals("STT-TIMEOUT", classify(Svc.STT, u, java.net.SocketTimeoutException("timeout")).code)
+        assertEquals("LLM-CONN-TIMEOUT", classify(Svc.LLM, u, java.net.SocketTimeoutException("failed to connect to /1.2.3.4 (port 18789) after 5000ms")).code)
         assertEquals("TTS-BAD-AUDIO", classify(Svc.TTS, u, IllegalStateException("bad")).code)
     }
 }

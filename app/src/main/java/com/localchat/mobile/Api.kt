@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
@@ -87,9 +88,11 @@ class Api {
             .build()
         val url = "${s.sttBase}/audio/transcriptions"
         try {
-            short.newCall(request(url, s.apiKey).post(form).build()).await().use {
-                if (!it.isSuccessful) throw httpError(it)
-                return JSONObject(it.body!!.string()).optString("text", "")
+            return withContext(Dispatchers.IO) {
+                short.newCall(request(url, s.apiKey).post(form).build()).await().use {
+                    if (!it.isSuccessful) throw httpError(it)
+                    JSONObject(it.body!!.string()).optString("text", "")
+                }
             }
         } catch (e: CancellationException) {
             throw e
@@ -107,9 +110,11 @@ class Api {
             .put("response_format", "wav")
         val url = "${s.ttsBase}/audio/speech"
         try {
-            short.newCall(request(url, s.apiKey).post(body.toString().toRequestBody(JSON)).build()).await().use {
-                if (!it.isSuccessful) throw httpError(it)
-                return parseWav(text, it.body!!.bytes())
+            return withContext(Dispatchers.IO) {
+                short.newCall(request(url, s.apiKey).post(body.toString().toRequestBody(JSON)).build()).await().use {
+                    if (!it.isSuccessful) throw httpError(it)
+                    parseWav(text, it.body!!.bytes())
+                }
             }
         } catch (e: CancellationException) {
             throw e
@@ -126,13 +131,15 @@ class Api {
         val base = when (svc) { Svc.LLM -> s.llmBase; Svc.STT -> s.sttBase; else -> s.ttsBase }
         val url = if (svc == Svc.LLM) "$base/models" else base
         return try {
-            short.newBuilder().callTimeout(8, TimeUnit.SECONDS).build()
-                .newCall(request(url, s.apiKey).get().build()).await().use {
+            withContext(Dispatchers.IO) {
+                short.newBuilder().callTimeout(8, TimeUnit.SECONDS).build()
+                    .newCall(request(url, s.apiKey).get().build()).await().use {
                     // Any non-auth answer proves the port is up; /models or the bare base may legitimately 404.
                     // For OpenClaw, GET /v1/models is documented, so a 404 means the endpoint is disabled.
                     if (it.code == 401 || it.code == 403 || it.code >= 500 || (svc == Svc.LLM && it.code == 404)) throw httpError(it)
-                    null
-                }
+                        null
+                    }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
