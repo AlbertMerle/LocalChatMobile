@@ -15,7 +15,9 @@ Open **Settings**, enter the server IP (e.g. `192.168.12.24`) and your API key. 
 
 Each port can be changed in Settings (e.g. chat to `8080`); leave a port blank to keep its default.
 The API key is sent as `Authorization: Bearer <key>` to all three. OpenClaw's chat endpoint is off by default:
-enable `gateway.http.endpoints.chatCompletions.enabled`.
+enable `gateway.http.endpoints.chatCompletions.enabled`; the key is your gateway token/password. Chat uses OpenClaw's
+[OpenAI-compatible API](https://docs.openclaw.ai/gateway/openai-http-api) (`model: openclaw/default`, streaming SSE). STT/TTS on 8081/8082 are your own
+OpenAI-style servers; OpenClaw itself doesn't serve them.
 
 ## Calls
 

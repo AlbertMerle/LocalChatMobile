@@ -46,11 +46,16 @@ fun classify(svc: Svc, url: String, e: Throwable): AppError {
         e is SSLException ->
             err("TLS", "${svc.label}: TLS/SSL failure. Local servers usually want http://, not https://.")
         e is HttpStatusException -> {
+            val llm = svc == Svc.LLM
             val hint = when (e.status) {
-                401, 403 -> "the server rejected the API key"
-                404 -> "endpoint not found; check the URL/path (it should end in /v1)"
-                400, 422 -> "the server rejected the request; check the model/voice name in Settings"
-                429 -> "too many requests"
+                401, 403 -> if (llm) "OpenClaw rejected the key; use the gateway token or password (gateway.auth.*)" else "the server rejected the API key"
+                404 -> if (llm) "OpenClaw's chat endpoint is off or the port is wrong; set gateway.http.endpoints.chatCompletions.enabled = true"
+                       else "endpoint not found; check the URL/path (it should end in /v1)"
+                400 -> if (llm) "OpenClaw refused the request (model should be openclaw/default)" else "the server rejected the request; check the model/voice name"
+                408 -> "the server timed out reading the request"
+                409 -> "the OpenClaw session is archived; unarchive it in the Control UI"
+                422 -> "the server rejected the request; check the model/voice name"
+                429 -> "rate limited (often repeated bad auth); wait and retry"
                 in 500..599 -> "the server itself failed"
                 else -> "unexpected response"
             }

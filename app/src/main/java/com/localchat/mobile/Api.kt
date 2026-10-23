@@ -129,7 +129,8 @@ class Api {
             short.newBuilder().callTimeout(8, TimeUnit.SECONDS).build()
                 .newCall(request(url, s.apiKey).get().build()).await().use {
                     // Any non-auth answer proves the port is up; /models or the bare base may legitimately 404.
-                    if (it.code == 401 || it.code == 403 || it.code >= 500) throw httpError(it)
+                    // For OpenClaw, GET /v1/models is documented, so a 404 means the endpoint is disabled.
+                    if (it.code == 401 || it.code == 403 || it.code >= 500 || (svc == Svc.LLM && it.code == 404)) throw httpError(it)
                     null
                 }
         } catch (e: CancellationException) {
