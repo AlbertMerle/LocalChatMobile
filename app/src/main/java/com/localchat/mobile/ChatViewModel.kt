@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-enum class Screen { Chat, Settings }
+enum class Screen { Chat, Settings, Log }
 
 class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private val store = SettingsStore(app)
@@ -65,9 +65,25 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 conversation.finish(id)
                 throw e
             } catch (e: Exception) {
-                conversation.fail(id, e.message ?: "request failed")
+                conversation.fail(id, ErrorLog.report(Svc.LLM, s.llmBase, e).display)
             } finally {
                 _busy.value = false
+            }
+        }
+    }
+
+    private val _probe = MutableStateFlow<List<String>?>(null)
+    val probe: StateFlow<List<String>?> = _probe.asStateFlow()
+
+    /** Checks all three endpoints with the (possibly unsaved) settings and reports each result. */
+    fun testConnection(s: Settings) {
+        if (!s.isConfigured) return
+        _probe.value = listOf("Testing…")
+        viewModelScope.launch {
+            _probe.value = listOf(Svc.LLM, Svc.STT, Svc.TTS).map { svc ->
+                val base = when (svc) { Svc.LLM -> s.llmBase; Svc.STT -> s.sttBase; else -> s.ttsBase }
+                val err = api.probe(svc, s)
+                if (err == null) "✓ ${svc.label} reachable ($base)" else "✗ ${err.display}".also { ErrorLog.report(err) }
             }
         }
     }

@@ -35,3 +35,29 @@ Use headphones or modest speaker volume for the best barge-in. Tunables are cons
 
 `./gradlew assembleRelease` → `app/build/outputs/apk/release/app-release.apk` (signed with the debug key so it
 sideloads directly). The GitHub Actions workflow builds it on every push and uploads the APK as an artifact.
+
+## Download
+
+A prebuilt APK is committed at [`dist/LocalChat.apk`](dist/LocalChat.apk). Open it on your phone
+(GitHub app/browser → Download) and allow "install unknown apps" when asked.
+
+## Errors
+
+Every failure shows a short code and is kept under **Errors** (top bar) → **Copy all**, which copies a report
+(device, URLs, no API key) you can paste to whoever is debugging. Settings has a **Test connection** button
+that checks all three ports.
+
+| Code | Meaning |
+|---|---|
+| `LLM-/STT-/TTS-CONN` | Can't connect: server down, wrong port, or phone on another network |
+| `…-DNS` | Address can't be resolved (typo in IP) |
+| `…-TIMEOUT` | Server didn't answer in time |
+| `…-HTTP-401/403` | API key rejected |
+| `…-HTTP-404` | Wrong path (URL should end in `/v1`) |
+| `…-HTTP-400/422` | Request refused, usually wrong model or voice name |
+| `…-HTTP-5xx` | Server-side failure |
+| `…-BAD-RESPONSE` | Reply wasn't the expected JSON |
+| `TTS-BAD-AUDIO` | TTS didn't return 16-bit WAV |
+| `LLM-SERVER-ERROR` | Error object inside the chat stream |
+| `MIC-PERMISSION` / `MIC-INIT` / `MIC-FAIL` | Microphone denied / couldn't start / failed |
+| `AUDIO-PLAY` | Playback failed |

@@ -79,6 +79,10 @@ fun ChatScreen(vm: ChatViewModel, onCall: () -> Unit) {
             TopAppBar(
                 title = { Text("LocalChat") },
                 actions = {
+                    val errCount by ErrorLog.entries.collectAsStateWithLifecycle()
+                    if (errCount.isNotEmpty()) TextButton(onClick = { vm.show(Screen.Log) }) {
+                        Text("Errors (${errCount.size})", color = MaterialTheme.colorScheme.error)
+                    }
                     if (messages.isNotEmpty()) TextButton(onClick = vm::clearChat) { Text("Clear") }
                     IconButton(onClick = onCall) { Icon(Icons.Default.Call, contentDescription = "Call") }
                     IconButton(onClick = { vm.show(Screen.Settings) }) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
@@ -185,7 +189,8 @@ fun CallScreen(engine: CallEngine, conversation: Conversation, onEnd: () -> Unit
             else if (lastAi.isNotEmpty()) Text(lastAi, color = Color(0xFFCBD5E1), textAlign = TextAlign.Center)
             error?.let {
                 Spacer(Modifier.height(12.dp))
-                Text(it, color = Color(0xFFFCA5A5), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+                Text(it, color = Color(0xFFFCA5A5), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+                Text("Full details: Errors > Copy all, after ending the call", color = Color(0xFF94A3B8), style = MaterialTheme.typography.bodySmall)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -199,7 +204,13 @@ fun CallScreen(engine: CallEngine, conversation: Conversation, onEnd: () -> Unit
 private fun BackHandlerCompat(onBack: () -> Unit) = androidx.activity.compose.BackHandler(onBack = onBack)
 
 @Composable
-fun SettingsScreen(initial: Settings, onSave: (Settings) -> Unit) {
+fun SettingsScreen(
+    initial: Settings,
+    probe: List<String>?,
+    onTest: (Settings) -> Unit,
+    onLog: () -> Unit,
+    onSave: (Settings) -> Unit,
+) {
     var s by remember { mutableStateOf(initial) }
     var showKey by remember { mutableStateOf(false) }
 
@@ -244,7 +255,12 @@ fun SettingsScreen(initial: Settings, onSave: (Settings) -> Unit) {
             label = { Text("System prompt (optional)") }, minLines = 2, maxLines = 6, modifier = Modifier.fillMaxWidth(),
         )
 
+        OutlinedButton(onClick = { onTest(s) }, enabled = s.isConfigured, modifier = Modifier.fillMaxWidth()) { Text("Test connection") }
+        probe?.forEach {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = if (it.startsWith("✗")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+        }
         Button(onClick = { onSave(s) }, enabled = s.isConfigured, modifier = Modifier.fillMaxWidth()) { Text("Save") }
+        TextButton(onClick = onLog, modifier = Modifier.fillMaxWidth()) { Text("View error log") }
     }
 }
 
@@ -259,3 +275,34 @@ private fun UrlField(label: String, value: String, default: String, onChange: (S
 @Composable
 private fun Field(label: String, value: String, onChange: (String) -> Unit) =
     OutlinedTextField(value = value, onValueChange = onChange, label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LogScreen(settings: Settings, onBack: () -> Unit) {
+    val entries by ErrorLog.entries.collectAsStateWithLifecycle()
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val fmt = remember { java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US) }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Error log") },
+                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
+                actions = {
+                    TextButton(onClick = { clipboard.setText(androidx.compose.ui.text.AnnotatedString(ErrorLog.dump(settings))) }) { Text("Copy all") }
+                    TextButton(onClick = ErrorLog::clear) { Text("Clear") }
+                },
+            )
+        },
+    ) { pad ->
+        LazyColumn(Modifier.fillMaxSize().padding(pad), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (entries.isEmpty()) item { Text("No errors so far.") }
+            items(entries) { e ->
+                Column {
+                    Text("${fmt.format(java.util.Date(e.time))}  [${e.code}]", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge)
+                    Text(e.message)
+                    if (e.detail.isNotBlank()) Text(e.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}

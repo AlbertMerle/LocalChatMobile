@@ -3,6 +3,7 @@ package com.localchat.mobile
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -41,7 +42,10 @@ class MainActivity : ComponentActivity() {
                 val call by vm.call.collectAsStateWithLifecycle()
 
                 val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-                    if (granted) vm.startCall()
+                    if (granted) vm.startCall() else {
+                        ErrorLog.report(AppError("MIC-PERMISSION", "Microphone permission was denied. Allow it in Android Settings > Apps > LocalChat to make calls."))
+                        Toast.makeText(ctx, "[MIC-PERMISSION] Microphone permission denied", Toast.LENGTH_LONG).show()
+                    }
                 }
                 val requestCall = {
                     if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
@@ -56,7 +60,12 @@ class MainActivity : ComponentActivity() {
                     engine != null -> CallScreen(engine, vm.conversation, onEnd = vm::endCall)
                     screen == Screen.Settings -> {
                         BackHandler(enabled = vm.settings.value.isConfigured) { vm.show(Screen.Chat) }
-                        SettingsScreen(vm.settings.value, onSave = vm::save)
+                        val probe by vm.probe.collectAsStateWithLifecycle()
+                        SettingsScreen(vm.settings.value, probe, onTest = vm::testConnection, onLog = { vm.show(Screen.Log) }, onSave = vm::save)
+                    }
+                    screen == Screen.Log -> {
+                        BackHandler { vm.show(Screen.Chat) }
+                        LogScreen(vm.settings.value, onBack = { vm.show(Screen.Chat) })
                     }
                     else -> ChatScreen(vm, onCall = requestCall)
                 }

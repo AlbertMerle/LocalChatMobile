@@ -1,5 +1,6 @@
 package com.localchat.mobile
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -43,8 +44,9 @@ class Api {
             .put("messages", JSONArray().also { arr ->
                 messages.forEach { arr.put(JSONObject().put("role", it.role).put("content", it.content)) }
             })
+        val url = "${s.llmBase}/chat/completions"
         val call = stream.newCall(
-            request("${s.llmBase}/chat/completions", s.apiKey)
+            request(url, s.apiKey)
                 .post(body.toString().toRequestBody(JSON)).build()
         )
         launch(Dispatchers.IO) {
@@ -59,7 +61,9 @@ class Api {
                         val payload = line.substring(5).trim()
                         if (payload == "[DONE]") break
                         val obj = JSONObject(payload)
-                        obj.optJSONObject("error")?.let { throw IOException(it.optString("message", it.toString())) }
+                        obj.optJSONObject("error")?.let {
+                            throw AppError("LLM-SERVER-ERROR", "AI chat: the server reported an error: ${it.optString("message", it.toString()).take(200)}", url)
+                        }
                         val delta = obj.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta") ?: continue
                         if (delta.isNull("content")) continue
                         val text = think.feed(delta.getString("content"))
@@ -68,7 +72,7 @@ class Api {
                 }
                 close()
             } catch (e: Exception) {
-                if (call.isCanceled()) close() else close(e)
+                if (call.isCanceled()) close() else close(classify(Svc.LLM, url, e))
             }
         }
         awaitClose { call.cancel() }
@@ -81,10 +85,16 @@ class Api {
             .addFormDataPart("model", s.sttModel)
             .addFormDataPart("response_format", "json")
             .build()
-        val resp = short.newCall(request("${s.sttBase}/audio/transcriptions", s.apiKey).post(form).build()).await()
-        resp.use {
-            if (!it.isSuccessful) throw httpError(it)
-            return JSONObject(it.body!!.string()).optString("text", "")
+        val url = "${s.sttBase}/audio/transcriptions"
+        try {
+            short.newCall(request(url, s.apiKey).post(form).build()).await().use {
+                if (!it.isSuccessful) throw httpError(it)
+                return JSONObject(it.body!!.string()).optString("text", "")
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            throw classify(Svc.STT, url, e)
         }
     }
 
@@ -95,16 +105,38 @@ class Api {
             .put("input", text)
             .put("voice", s.voice)
             .put("response_format", "wav")
-        val resp = short.newCall(request("${s.ttsBase}/audio/speech", s.apiKey).post(body.toString().toRequestBody(JSON)).build()).await()
-        resp.use {
-            if (!it.isSuccessful) throw httpError(it)
-            return parseWav(text, it.body!!.bytes())
+        val url = "${s.ttsBase}/audio/speech"
+        try {
+            short.newCall(request(url, s.apiKey).post(body.toString().toRequestBody(JSON)).build()).await().use {
+                if (!it.isSuccessful) throw httpError(it)
+                return parseWav(text, it.body!!.bytes())
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            throw classify(Svc.TTS, url, e)
         }
     }
 
-    private fun httpError(resp: Response): IOException {
-        val detail = runCatching { resp.body?.string().orEmpty() }.getOrDefault("").take(200)
-        return IOException("HTTP ${resp.code} from ${resp.request.url.host}:${resp.request.url.port} $detail".trim())
+    private fun httpError(resp: Response): HttpStatusException =
+        HttpStatusException(resp.code, runCatching { resp.body?.string().orEmpty() }.getOrDefault(""))
+
+    /** Reachability check for the Settings screen. Returns null when the endpoint answers sensibly. */
+    suspend fun probe(svc: Svc, s: Settings): AppError? {
+        val base = when (svc) { Svc.LLM -> s.llmBase; Svc.STT -> s.sttBase; else -> s.ttsBase }
+        val url = if (svc == Svc.LLM) "$base/models" else base
+        return try {
+            short.newBuilder().callTimeout(8, TimeUnit.SECONDS).build()
+                .newCall(request(url, s.apiKey).get().build()).await().use {
+                    // Any non-auth answer proves the port is up; /models or the bare base may legitimately 404.
+                    if (it.code == 401 || it.code == 403 || it.code >= 500) throw httpError(it)
+                    null
+                }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            classify(svc, url, e)
+        }
     }
 }
 

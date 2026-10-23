@@ -42,6 +42,10 @@ class VoiceCapture(private val onLevel: (Float) -> Unit) {
             AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
             maxOf(minBuf, FRAME * 2 * 8),
         )
+        if (rec.state != AudioRecord.STATE_INITIALIZED) {
+            rec.release()
+            throw AppError("MIC-INIT", "Microphone couldn't start. Is another app using it, or is the permission denied?")
+        }
         val fx = buildList {
             if (AcousticEchoCanceler.isAvailable()) AcousticEchoCanceler.create(rec.audioSessionId)?.let { it.enabled = true; add(it) }
             if (NoiseSuppressor.isAvailable()) NoiseSuppressor.create(rec.audioSessionId)?.let { it.enabled = true; add(it) }

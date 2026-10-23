@@ -60,11 +60,17 @@ class CallEngine(
         if (root != null) return
         root = scope.launch {
             launch { for (seg in segments) processSegment(seg) }
-            capture.events().collect { ev ->
-                when (ev) {
-                    MicEvent.SpeechStart -> onSpeechStart()
-                    is MicEvent.SpeechEnd -> { userSpeaking = false; pendingStt++; segments.trySend(ev) }
+            try {
+                capture.events().collect { ev ->
+                    when (ev) {
+                        MicEvent.SpeechStart -> onSpeechStart()
+                        is MicEvent.SpeechEnd -> { userSpeaking = false; pendingStt++; segments.trySend(ev) }
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                report(if (e is AppError) e else AppError("MIC-FAIL", "Microphone error: ${e.message}", e.toString()))
             }
         }
     }
@@ -75,6 +81,11 @@ class CallEngine(
         player.paused = false
         assistantId?.let { id -> if (spoken.isBlank()) conv.remove(id) else { conv.setText(id, spoken.toString().trim()); conv.finish(id) } }
         assistantId = null
+    }
+
+    private fun report(e: AppError) {
+        ErrorLog.report(e)
+        error.value = e.display
     }
 
     fun setMuted(m: Boolean) { muted.value = m; capture.muted = m }
@@ -97,7 +108,7 @@ class CallEngine(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            error.value = "Speech-to-text: ${e.message}"
+            report(classify(Svc.STT, settings().sttBase, e))
             ""
         }
         pendingStt--
@@ -177,8 +188,9 @@ class CallEngine(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error.value = "AI: ${e.message}"
-                if (!dropSpeech) conv.fail(id, e.message ?: "request failed")
+                val err = classify(Svc.LLM, settings().llmBase, e)
+                report(err)
+                if (!dropSpeech) conv.fail(id, err.display)
             } finally {
                 queue.close()
             }
@@ -197,7 +209,7 @@ class CallEngine(
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
-                            error.value = "Text-to-speech: ${e.message}"
+                            report(classify(Svc.TTS, settings().ttsBase, e))
                             continue
                         }
                         clips.send(clip)
@@ -209,7 +221,13 @@ class CallEngine(
             for (clip in clips) {
                 if (!userSpeaking) setPhase(CallPhase.Speaking)
                 spoken.append(clip.text).append(' ')
-                player.play(clip)
+                try {
+                    player.play(clip)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    report(AppError("AUDIO-PLAY", "Couldn't play audio: ${e.message}", e.toString()))
+                }
             }
         }
         // Reached only when the whole reply was spoken (cancellation skips this).

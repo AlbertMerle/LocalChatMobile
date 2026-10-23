@@ -55,3 +55,14 @@ class LogicTest {
         assertEquals(pcm.toList(), clip.pcm.toList())
     }
 }
+
+class ErrorTest {
+    @Test fun codes() {
+        val u = "http://x:8081/v1/audio/transcriptions"
+        assertEquals("STT-HTTP-401", classify(Svc.STT, u, HttpStatusException(401, "")).code)
+        assertEquals("LLM-CONN", classify(Svc.LLM, u, java.net.ConnectException("refused")).code)
+        assertEquals("TTS-DNS", classify(Svc.TTS, u, java.net.UnknownHostException("x")).code)
+        assertEquals("STT-TIMEOUT", classify(Svc.STT, u, java.net.SocketTimeoutException()).code)
+        assertEquals("TTS-BAD-AUDIO", classify(Svc.TTS, u, IllegalStateException("bad")).code)
+    }
+}
