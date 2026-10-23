@@ -39,7 +39,7 @@ class Api {
     /** Streams assistant text deltas from `POST {llm}/chat/completions` (SSE). */
     fun chatStream(s: Settings, messages: List<ApiMessage>): Flow<String> = channelFlow {
         val body = JSONObject()
-            .put("model", s.llmModel)
+            .put("model", LLM_MODEL)
             .put("stream", true)
             .put("messages", JSONArray().also { arr ->
                 messages.forEach { arr.put(JSONObject().put("role", it.role).put("content", it.content)) }
@@ -82,7 +82,7 @@ class Api {
     suspend fun transcribe(s: Settings, wav: ByteArray): String {
         val form = MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart("file", "audio.wav", wav.toRequestBody("audio/wav".toMediaType()))
-            .addFormDataPart("model", s.sttModel)
+            .addFormDataPart("model", STT_MODEL)
             .addFormDataPart("response_format", "json")
             .build()
         val url = "${s.sttBase}/audio/transcriptions"
@@ -101,9 +101,9 @@ class Api {
     /** `POST {tts}/audio/speech`; returns a WAV clip (raw 24 kHz PCM is assumed if no RIFF header). */
     suspend fun synthesize(s: Settings, text: String): Clip {
         val body = JSONObject()
-            .put("model", s.ttsModel)
+            .put("model", TTS_MODEL)
             .put("input", text)
-            .put("voice", s.voice)
+            .put("voice", TTS_VOICE)
             .put("response_format", "wav")
         val url = "${s.ttsBase}/audio/speech"
         try {

@@ -43,9 +43,7 @@ class Conversation {
     /** Builds the request history. Consecutive same-role messages are merged (some servers require alternation). */
     fun toApi(s: Settings, callMode: Boolean): List<ApiMessage> {
         val out = mutableListOf<ApiMessage>()
-        val system = listOfNotNull(s.systemPrompt.trim().ifEmpty { null }, VOICE_HINT.takeIf { callMode })
-            .joinToString("\n\n")
-        if (system.isNotEmpty()) out += ApiMessage("system", system)
+        if (callMode) out += ApiMessage("system", VOICE_HINT)
         for (m in messages.value) {
             if (m.text.isBlank()) continue
             val last = out.lastOrNull()

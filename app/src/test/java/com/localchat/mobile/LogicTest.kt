@@ -7,20 +7,21 @@ import org.junit.Test
 class LogicTest {
     @Test fun defaultPortsFromIp() {
         val s = Settings(host = "192.168.12.24")
-        assertEquals("http://192.168.12.24:8080/v1", s.llmBase)
+        assertEquals("http://192.168.12.24:18789/v1", s.llmBase)
         assertEquals("http://192.168.12.24:8081/v1", s.sttBase)
         assertEquals("http://192.168.12.24:8082/v1", s.ttsBase)
     }
 
     @Test fun pastedUrlIsReducedToHost() {
-        assertEquals("http://10.0.0.5:8080/v1", Settings(host = "http://10.0.0.5/v1").llmBase)
+        assertEquals("http://10.0.0.5:18789/v1", Settings(host = "http://10.0.0.5/v1").llmBase)
         assertEquals("http://10.0.0.5:8082/v1", Settings(host = "10.0.0.5:9999").ttsBase)
     }
 
-    @Test fun overrideWins() {
-        val s = Settings(host = "10.0.0.5", sttUrl = "10.0.0.9:9000/v1/")
-        assertEquals("http://10.0.0.9:9000/v1", s.sttBase)
+    @Test fun portOverridesAndInvalidFallBack() {
+        val s = Settings(host = "10.0.0.5", llmPort = "8080", sttPort = "9000", ttsPort = "0")
         assertEquals("http://10.0.0.5:8080/v1", s.llmBase)
+        assertEquals("http://10.0.0.5:9000/v1", s.sttBase)
+        assertEquals("http://10.0.0.5:8082/v1", s.ttsBase)
     }
 
     @Test fun unconfiguredWhenBlank() {

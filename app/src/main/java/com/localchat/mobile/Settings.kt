@@ -2,25 +2,26 @@ package com.localchat.mobile
 
 import android.content.Context
 
-const val DEFAULT_LLM_PORT = 8080
+const val DEFAULT_LLM_PORT = 18789 // OpenClaw gateway
 const val DEFAULT_STT_PORT = 8081
 const val DEFAULT_TTS_PORT = 8082
 
+// Fixed request values; local servers generally ignore the STT/TTS ones.
+const val LLM_MODEL = "openclaw/default"
+const val STT_MODEL = "whisper-1"
+const val TTS_MODEL = "tts-1"
+const val TTS_VOICE = "alloy"
+
 /**
- * Connection settings. [host] is just the IP/hostname; the three service URLs are derived from it
- * (`http://host:8080/v1`, `:8081/v1`, `:8082/v1`) unless an override is filled in.
+ * Connection settings: one IP plus an optional port per service. A blank port means the default.
+ * URLs are `http://<ip>:<port>/v1`.
  */
 data class Settings(
     val host: String = "",
     val apiKey: String = "",
-    val llmUrl: String = "",
-    val sttUrl: String = "",
-    val ttsUrl: String = "",
-    val llmModel: String = "default",
-    val sttModel: String = "whisper-1",
-    val ttsModel: String = "tts-1",
-    val voice: String = "alloy",
-    val systemPrompt: String = "",
+    val llmPort: String = "",
+    val sttPort: String = "",
+    val ttsPort: String = "",
 ) {
     /** Host with any scheme, port or path the user may have pasted in stripped off. */
     val cleanHost: String
@@ -28,21 +29,16 @@ data class Settings(
             .removePrefix("http://").removePrefix("https://")
             .substringBefore('/').substringBefore(':')
 
-    val llmBase get() = resolve(llmUrl, DEFAULT_LLM_PORT)
-    val sttBase get() = resolve(sttUrl, DEFAULT_STT_PORT)
-    val ttsBase get() = resolve(ttsUrl, DEFAULT_TTS_PORT)
+    val llmBase get() = url(llmPort, DEFAULT_LLM_PORT)
+    val sttBase get() = url(sttPort, DEFAULT_STT_PORT)
+    val ttsBase get() = url(ttsPort, DEFAULT_TTS_PORT)
 
-    val isConfigured get() = llmBase.isNotEmpty()
+    val isConfigured get() = cleanHost.isNotEmpty()
 
-    fun defaultUrl(port: Int) = if (cleanHost.isEmpty()) "http://<ip>:$port/v1" else "http://$cleanHost:$port/v1"
-
-    private fun resolve(override: String, port: Int): String {
-        val o = override.trim()
-        if (o.isNotEmpty()) {
-            val withScheme = if (o.startsWith("http://") || o.startsWith("https://")) o else "http://$o"
-            return withScheme.trimEnd('/')
-        }
-        return if (cleanHost.isEmpty()) "" else defaultUrl(port)
+    private fun url(port: String, default: Int): String {
+        if (cleanHost.isEmpty()) return ""
+        val p = port.trim().toIntOrNull()?.takeIf { it in 1..65535 } ?: default
+        return "http://$cleanHost:$p/v1"
     }
 }
 
@@ -50,34 +46,17 @@ class SettingsStore(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
     fun load(): Settings {
-        val d = Settings()
-        fun s(k: String, def: String) = prefs.getString(k, def) ?: def
-        return Settings(
-            host = s("host", d.host),
-            apiKey = s("apiKey", d.apiKey),
-            llmUrl = s("llmUrl", d.llmUrl),
-            sttUrl = s("sttUrl", d.sttUrl),
-            ttsUrl = s("ttsUrl", d.ttsUrl),
-            llmModel = s("llmModel", d.llmModel),
-            sttModel = s("sttModel", d.sttModel),
-            ttsModel = s("ttsModel", d.ttsModel),
-            voice = s("voice", d.voice),
-            systemPrompt = s("systemPrompt", d.systemPrompt),
-        )
+        fun s(k: String) = prefs.getString(k, "") ?: ""
+        return Settings(s("host"), s("apiKey"), s("llmPort"), s("sttPort"), s("ttsPort"))
     }
 
     fun save(s: Settings) {
         prefs.edit()
             .putString("host", s.host.trim())
             .putString("apiKey", s.apiKey.trim())
-            .putString("llmUrl", s.llmUrl.trim())
-            .putString("sttUrl", s.sttUrl.trim())
-            .putString("ttsUrl", s.ttsUrl.trim())
-            .putString("llmModel", s.llmModel.trim())
-            .putString("sttModel", s.sttModel.trim())
-            .putString("ttsModel", s.ttsModel.trim())
-            .putString("voice", s.voice.trim())
-            .putString("systemPrompt", s.systemPrompt)
+            .putString("llmPort", s.llmPort.trim())
+            .putString("sttPort", s.sttPort.trim())
+            .putString("ttsPort", s.ttsPort.trim())
             .apply()
     }
 }

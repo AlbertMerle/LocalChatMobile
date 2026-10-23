@@ -220,14 +220,9 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Server", style = MaterialTheme.typography.headlineSmall)
-        Text(
-            "Enter the IP of the machine running OpenClaw. Chat, speech-to-text and text-to-speech " +
-                "are reached on ports $DEFAULT_LLM_PORT, $DEFAULT_STT_PORT and $DEFAULT_TTS_PORT.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
         OutlinedTextField(
             value = s.host, onValueChange = { s = s.copy(host = it) },
-            label = { Text("Server IP") }, placeholder = { Text("192.168.12.24") },
+            label = { Text("IP address") }, placeholder = { Text("192.168.12.24") },
             singleLine = true, modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
         )
@@ -238,22 +233,12 @@ fun SettingsScreen(
             trailingIcon = { TextButton(onClick = { showKey = !showKey }) { Text(if (showKey) "Hide" else "Show") } },
         )
 
-        HorizontalDivider()
-        Text("Endpoints (leave blank for the default)", style = MaterialTheme.typography.titleMedium)
-        UrlField("AI chat", s.llmUrl, s.defaultUrl(DEFAULT_LLM_PORT)) { s = s.copy(llmUrl = it) }
-        UrlField("Speech-to-text", s.sttUrl, s.defaultUrl(DEFAULT_STT_PORT)) { s = s.copy(sttUrl = it) }
-        UrlField("Text-to-speech", s.ttsUrl, s.defaultUrl(DEFAULT_TTS_PORT)) { s = s.copy(ttsUrl = it) }
-
-        HorizontalDivider()
-        Text("Models", style = MaterialTheme.typography.titleMedium)
-        Field("Chat model", s.llmModel) { s = s.copy(llmModel = it) }
-        Field("STT model", s.sttModel) { s = s.copy(sttModel = it) }
-        Field("TTS model", s.ttsModel) { s = s.copy(ttsModel = it) }
-        Field("TTS voice", s.voice) { s = s.copy(voice = it) }
-        OutlinedTextField(
-            value = s.systemPrompt, onValueChange = { s = s.copy(systemPrompt = it) },
-            label = { Text("System prompt (optional)") }, minLines = 2, maxLines = 6, modifier = Modifier.fillMaxWidth(),
-        )
+        Text("Ports (leave blank for default)", style = MaterialTheme.typography.titleMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PortField("Chat", s.llmPort, DEFAULT_LLM_PORT, Modifier.weight(1f)) { s = s.copy(llmPort = it) }
+            PortField("Speech-to-text", s.sttPort, DEFAULT_STT_PORT, Modifier.weight(1f)) { s = s.copy(sttPort = it) }
+            PortField("Text-to-speech", s.ttsPort, DEFAULT_TTS_PORT, Modifier.weight(1f)) { s = s.copy(ttsPort = it) }
+        }
 
         OutlinedButton(onClick = { onTest(s) }, enabled = s.isConfigured, modifier = Modifier.fillMaxWidth()) { Text("Test connection") }
         probe?.forEach {
@@ -265,16 +250,13 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun UrlField(label: String, value: String, default: String, onChange: (String) -> Unit) =
+private fun PortField(label: String, value: String, default: Int, modifier: Modifier, onChange: (String) -> Unit) =
     OutlinedTextField(
-        value = value, onValueChange = onChange, label = { Text(label) }, placeholder = { Text(default) },
-        singleLine = true, modifier = Modifier.fillMaxWidth(),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+        value = value, onValueChange = { onChange(it.filter(Char::isDigit).take(5)) },
+        label = { Text(label, maxLines = 1) }, placeholder = { Text("$default") },
+        singleLine = true, modifier = modifier,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
     )
-
-@Composable
-private fun Field(label: String, value: String, onChange: (String) -> Unit) =
-    OutlinedTextField(value = value, onValueChange = onChange, label = { Text(label) }, singleLine = true, modifier = Modifier.fillMaxWidth())
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
